@@ -4,7 +4,7 @@
       <header>
         <h1>My Hooks</h1>
         <div class="webhook-url">
-          <p>Webhook URL: <code>http://localhost:3050/webhook</code></p>
+          <p>Webhook URL: <code>{{ webhookUrl }}/webhook</code></p>
         </div>
       </header>
 
@@ -34,12 +34,14 @@ import { io } from 'socket.io-client'
 import axios from 'axios'
 
 const webhooks = ref([])
-const socket = io('http://localhost:3050')
+const webhookUrl = import.meta.env.VITE_WEBHOOK_URL || 'http://localhost:3050'
+
+const socket = io(webhookUrl)
 
 // Load existing webhooks on mount
 onMounted(async () => {
   try {
-    const response = await axios.get('http://localhost:3050/webhooks')
+    const response = await axios.get(`${webhookUrl}/webhooks`)
     webhooks.value = response.data
   } catch (error) {
     console.error('Failed to load webhooks:', error)
