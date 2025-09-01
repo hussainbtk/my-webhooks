@@ -12,27 +12,26 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const WEBHOOK_URL = process.env.VITE_WEBHOOK_URL || 'http://localhost:3050';
-const PORT = process.env.VITE_SERVER_PORT || 3050;
-const FRONTEND_URL = process.env.NODE_ENV === 'production' 
-  ? WEBHOOK_URL
-  : 'http://localhost:5174';
-
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: [FRONTEND_URL, WEBHOOK_URL],
-    methods: ["GET", "POST"],
-    credentials: true
-  }
-});
 
-app.use(cors({
-  origin: [FRONTEND_URL, WEBHOOK_URL],
+// Configure CORS for both Express and Socket.IO
+const corsOptions = {
+  origin: ['http://localhost:5174', 'https://c47addf855af.ngrok-free.app'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
   credentials: true
-}));
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
+
+// Configure Socket.IO with CORS
+const io = new Server(httpServer, {
+  cors: corsOptions,
+  transports: ['websocket', 'polling'],
+  allowEIO3: true
+});
 
 // Store webhooks in memory (for demo purposes)
 const webhooks = [];
@@ -51,7 +50,7 @@ app.post('/webhook', (req, res) => {
   webhooks.push(webhook);
 
   // Emit the webhook to all connected clients
-  io.emit('newWebhook', webhooks[webhooks.length - 1]);
+  io.emit('newWebhook', webhook);
   
   res.status(200).json({ message: 'Webhook received successfully' });
 });
@@ -61,8 +60,19 @@ app.get('/webhooks', (req, res) => {
   res.json(webhooks);
 });
 
-httpServer.listen(PORT, () => {
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  console.log('Client connected');
+  
+  // Send existing webhooks to newly connected client
+  socket.emit('existingWebhooks', webhooks);
+  
+  socket.on('disconnect', () => {
+    console.log('Client disconnected');
+  });
+});
+
+const PORT = process.env.PORT || 3050;
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`Webhook URL: ${WEBHOOK_URL}`);
-  console.log(`Frontend URL: ${FRONTEND_URL}`);
 });

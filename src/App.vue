@@ -6,6 +6,9 @@
         <div class="webhook-url">
           <p>Webhook URL: <code>{{ webhookUrl }}/webhook</code></p>
         </div>
+        <div class="connection-status" :class="{ connected: isConnected }">
+          Socket.IO Status: {{ isConnected ? 'Connected' : 'Disconnected' }}
+        </div>
       </header>
 
       <main>
@@ -15,9 +18,12 @@
             No webhooks received yet
           </div>
           <div v-else class="webhook-list">
-            <div v-for="webhook in webhooks" :key="webhook.id" class="webhook-item">
+            <div v-for="webhook in sortedWebhooks" :key="webhook.id" class="webhook-item">
               <div class="webhook-header">
-                <span class="timestamp">{{ formatDate(webhook.sent_at || webhook.timestamp) }}</span>
+                <div class="webhook-info">
+                  <span class="event-type">{{ webhook.event_type || 'Webhook Event' }}</span>
+                  <span class="timestamp">{{ formatDate(webhook.received_at) }}</span>
+                </div>
               </div>
               <pre class="webhook-data">{{ formatWebhookData(webhook) }}</pre>
             </div>
@@ -29,52 +35,95 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { io } from 'socket.io-client'
 import axios from 'axios'
 
 const webhooks = ref([])
-const webhookUrl = import.meta.env.VITE_WEBHOOK_URL || 'http://localhost:3050'
+const isConnected = ref(false)
+const webhookUrl = 'https://c47addf855af.ngrok-free.app'
 
-const socket = io(webhookUrl)
+// Configure Socket.IO
+const socket = io(webhookUrl, {
+  transports: ['websocket', 'polling'],
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000,
+  autoConnect: false
+})
 
-// Load existing webhooks on mount
-onMounted(async () => {
-  try {
-    const response = await axios.get(`${webhookUrl}/webhooks`)
-    webhooks.value = response.data
-  } catch (error) {
-    console.error('Failed to load webhooks:', error)
-  }
+// Sort webhooks by received_at in descending order (newest first)
+const sortedWebhooks = computed(() => {
+  return [...webhooks.value].sort((a, b) => {
+    return new Date(b.received_at) - new Date(a.received_at)
+  })
 })
 
 // Format date string
 const formatDate = (dateStr) => {
-  if (!dateStr) return 'No date';
+  if (!dateStr) return 'Unknown time'
   try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return 'Invalid Date';
-    return date.toLocaleString();
+    const date = new Date(dateStr)
+    return new Intl.DateTimeFormat('default', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    }).format(date)
   } catch (e) {
-    return 'Invalid Date';
+    return 'Invalid date'
   }
 }
 
 // Format webhook data for display
 const formatWebhookData = (webhook) => {
-  const data = {
-    event_type: webhook.event_type,
-    sent_at: webhook.sent_at,
-    data: webhook.data,
-    schema_version: webhook.schema_version,
-    subscription_id: webhook.subscription_id
-  };
-  return JSON.stringify(data, null, 2);
+  if (!webhook) return 'No data'
+  
+  // Remove internal fields for display
+  const { id, received_at, ...displayData } = webhook
+  return JSON.stringify(displayData, null, 2)
 }
 
-// Listen for new webhooks
+// Socket.IO event handlers
+socket.on('connect', () => {
+  console.log('Connected to server')
+  isConnected.value = true
+})
+
+socket.on('disconnect', () => {
+  console.log('Disconnected from server')
+  isConnected.value = false
+})
+
+socket.on('existingWebhooks', (existingWebhooks) => {
+  webhooks.value = existingWebhooks
+})
+
 socket.on('newWebhook', (webhook) => {
-  webhooks.value.push(webhook)
+  webhooks.value = [webhook, ...webhooks.value]
+})
+
+// Load existing webhooks and connect socket on mount
+onMounted(() => {
+  // Load existing webhooks
+  axios.get(`${webhookUrl}/webhooks`)
+    .then(response => {
+      webhooks.value = response.data
+    })
+    .catch(error => {
+      console.error('Failed to load webhooks:', error)
+    })
+
+  // Connect to Socket.IO server
+  socket.connect()
+})
+
+// Cleanup on unmount
+onUnmounted(() => {
+  if (socket) {
+    socket.disconnect()
+  }
 })
 </script>
 
@@ -133,6 +182,20 @@ h1 {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
 }
 
+.connection-status {
+  margin-top: 10px;
+  padding: 8px;
+  border-radius: 4px;
+  background-color: #fee2e2;
+  color: #991b1b;
+  font-weight: 500;
+}
+
+.connection-status.connected {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
 .webhooks-container {
   background-color: #ffffff;
   border-radius: 12px;
@@ -173,6 +236,17 @@ h2 {
   background-color: #f8fafc;
   padding: 12px 16px;
   border-bottom: 1px solid #e2e8f0;
+}
+
+.webhook-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.event-type {
+  color: #2563eb;
+  font-weight: 500;
 }
 
 .timestamp {
