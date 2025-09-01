@@ -17,9 +17,9 @@
           <div v-else class="webhook-list">
             <div v-for="webhook in webhooks" :key="webhook.id" class="webhook-item">
               <div class="webhook-header">
-                <span class="timestamp">{{ new Date(webhook.timestamp).toLocaleString() }}</span>
+                <span class="timestamp">{{ formatDate(webhook.sent_at || webhook.timestamp) }}</span>
               </div>
-              <pre class="webhook-data">{{ JSON.stringify(webhook.data, null, 2) }}</pre>
+              <pre class="webhook-data">{{ formatWebhookData(webhook) }}</pre>
             </div>
           </div>
         </div>
@@ -47,6 +47,30 @@ onMounted(async () => {
     console.error('Failed to load webhooks:', error)
   }
 })
+
+// Format date string
+const formatDate = (dateStr) => {
+  if (!dateStr) return 'No date';
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    return date.toLocaleString();
+  } catch (e) {
+    return 'Invalid Date';
+  }
+}
+
+// Format webhook data for display
+const formatWebhookData = (webhook) => {
+  const data = {
+    event_type: webhook.event_type,
+    sent_at: webhook.sent_at,
+    data: webhook.data,
+    schema_version: webhook.schema_version,
+    subscription_id: webhook.subscription_id
+  };
+  return JSON.stringify(data, null, 2);
+}
 
 // Listen for new webhooks
 socket.on('newWebhook', (webhook) => {

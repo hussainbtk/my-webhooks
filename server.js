@@ -42,12 +42,13 @@ app.post('/webhook', (req, res) => {
   const webhookData = req.body;
   console.log('Received webhook:', webhookData);
   
-  // Store the webhook
-  webhooks.push({
+  // Store the webhook with all its original data
+  const webhook = {
     id: Date.now(),
-    timestamp: new Date().toISOString(),
-    data: webhookData
-  });
+    ...webhookData,
+    received_at: new Date().toISOString()
+  };
+  webhooks.push(webhook);
 
   // Emit the webhook to all connected clients
   io.emit('newWebhook', webhooks[webhooks.length - 1]);
