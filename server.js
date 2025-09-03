@@ -17,7 +17,7 @@ const httpServer = createServer(app);
 
 // Configure CORS for both Express and Socket.IO
 const corsOptions = {
-  origin: ['http://localhost:5174', 'https://c47addf855af.ngrok-free.app'],
+  origin: process.env.VITE_WEBHOOK_URL,
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type'],
   credentials: true

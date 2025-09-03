@@ -41,7 +41,7 @@ import axios from 'axios'
 
 const webhooks = ref([])
 const isConnected = ref(false)
-const webhookUrl = 'https://c47addf855af.ngrok-free.app'
+const webhookUrl = import.meta.env.VITE_WEBHOOK_URL
 
 // Configure Socket.IO
 const socket = io(webhookUrl, {
